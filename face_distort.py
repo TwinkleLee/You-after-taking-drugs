@@ -6,19 +6,34 @@ import numpy as np
 from scipy.spatial import Delaunay
 import os
 
+import global_data
+
 # dlib检测器进行初步人脸检测
 face_detector = dlib.get_frontal_face_detector()
+
+
+now = time.time()
 # dlib基于ERT算法实现的人脸定位
 predictor_path = 'model/shape_predictor_68_face_landmarks.dat'
 shape_predictor = dlib.shape_predictor(predictor_path)
-customer_img_path = 'resources/customer2.png'
+print(f'model time:{time.time()-now}')
+
+
+customer_img_path = 'resources/' + global_data.customer_img_path
 addict_img_path = 'resources/addictor.png'
 output_path = 'out'
-face_thin_alpha = 1 # 数值越大瘦脸程度越大
-cut_image = True
-exposure_alpha = 1  # 防曝光，如果出现异常蓝点调大此数值，大于1的值可能导致出现色差
-# TODO：用一种更柔和的方式除曝光
+# 数值越大瘦脸程度越大
+face_thin_alpha = float(global_data.face_thin_alpha) 
 
+# 数值越大越像吸毒
+alpha_1 = float(global_data.alpha_1) 
+alpha_2 = float(global_data.alpha_2) 
+alpha_3 = float(global_data.alpha_3) 
+alpha_4 = float(global_data.alpha_4) 
+
+cut_image = bool(int(global_data.cut_image))
+exposure_alpha = float(global_data.exposure_alpha)  # 防曝光，如果出现异常蓝点调大此数值，大于1的值可能导致出现色差
+# TODO：用一种更柔和的方式除曝光
 
 def detect_face_and_cut(img: np.ndarray) -> np.ndarray:
     """识别人脸并裁剪合适的部分。
@@ -59,7 +74,6 @@ def detect_face_and_cut(img: np.ndarray) -> np.ndarray:
     raise RuntimeError(
         f'There are {len(rects)} faces in your image, expecting only 1')
 
-
 def get_face_68_landmarks(img: np.ndarray) -> np.ndarray:
     """获取人脸68个特征点
 
@@ -69,12 +83,24 @@ def get_face_68_landmarks(img: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: 68特征点列表
     """
+
     # 转化为灰度图加速检测运算
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
     rects = face_detector(img_gray, 1)
+
+    p_parts = shape_predictor(img, rects[0]).parts()
+
+    res_list = []
+    for i in range(len(p_parts)):
+        res_list.append([p_parts[i].x,p_parts[i].y])
+    return np.array(res_list)
+
+    # 不知道为什么,以下函数直接执行没有效果且退出了程序,因此改成上述插入数组方式
+    print([p.x, p.y] for p in p_parts)
+
     return np.array([[p.x, p.y]
                      for p in shape_predictor(img, rects[0]).parts()])
-
 
 def local_translation_warp(img: np.ndarray, center_point: np.ndarray,
                            mouse_point: np.ndarray,
@@ -170,6 +196,7 @@ def face_thin(img: np.ndarray, alpha: float = 1) -> np.ndarray:
     Returns:
         np.ndarray: 瘦脸后的图像
     """
+
     # 获取关键点
     landmarks = get_face_68_landmarks(img)
 
@@ -520,6 +547,7 @@ def face_morph(bottom_img: np.ndarray,
     return merged_img
 
 
+
 if __name__ == "__main__":
 
     customer_img = cv2.imread(customer_img_path)
@@ -540,22 +568,22 @@ if __name__ == "__main__":
     # 人脸融合
     merge_image = face_morph(customer_thin_image,
                              addict_img,
-                             alpha=0.2,
+                             alpha=alpha_1,
                              exposure_alpha=exposure_alpha)
     merge_image_2 = face_morph(customer_thin_image,
                                addict_img,
-                               alpha=0.4,
+                               alpha=alpha_2,
                                exposure_alpha=exposure_alpha)
     merge_image_3 = face_morph(customer_thin_image_2,
                                addict_img,
-                               alpha=0.6,
+                               alpha=alpha_3,
                                exposure_alpha=exposure_alpha)
     merge_image_4 = face_morph(customer_thin_image_2,
                                addict_img,
-                               alpha=0.8,
+                               alpha=alpha_4,
                                exposure_alpha=exposure_alpha)
 
-    print(f'time usage:{time.time()-now}')
+    print(f'merge time:{time.time()-now}')
 
     # 保存输出图像
     if not os.path.exists(output_path):
